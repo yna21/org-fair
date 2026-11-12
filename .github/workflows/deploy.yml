@@ -1,0 +1,56 @@
+name: Deploy to GitHub Pages
+
+# TODO C1: run on every push to main, and by hand from the Actions tab
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter test
+
+      # TODO C2: GitHub Pages serves the site from /<repository>/, so the
+      # base href must match. The CMS values come from repository variables;
+      # the token comes from a secret.
+      - name: Build web
+        run: >-
+          flutter build web --release
+          --base-href "/${{ github.event.repository.name }}/"
+          --dart-define=CMS=${{ vars.CMS }}
+          --dart-define=CMS_SPACE=${{ vars.CMS_SPACE }}
+          --dart-define=CMS_TOKEN=${{ secrets.CMS_TOKEN }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
